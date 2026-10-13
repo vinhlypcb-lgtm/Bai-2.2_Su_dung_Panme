@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bài 2.2 - Sử dụng Panme đo đường kính (độ đọc 0,01 mm)</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',Tahoma,sans-serif;background:#1a1a2e;color:#fff}
+#container{display:flex;height:100vh;width:100vw}
+#cc{flex:1;position:relative;background:radial-gradient(circle,#2a2a4a 0%,#0f0f1a 100%);min-height:380px}
+#title{position:absolute;top:12px;left:12px;z-index:10;background:rgba(0,0,0,.7);padding:8px 14px;border-radius:8px}
+#title h1{font-size:1.1rem;color:#4ecca3}#title p{font-size:.8rem;color:#aaa}
+#bView{position:absolute;top:12px;right:12px;z-index:10;width:auto;padding:8px 14px}
+#zoomwrap{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);width:min(900px,calc(100% - 20px));z-index:10;background:rgba(0,0,0,.78);border:2px solid #4ecca3;border-radius:8px;padding:6px 8px}
+#zoomwrap .zt{display:flex;justify-content:space-between;font-size:.8rem;color:#4ecca3;margin-bottom:4px}
+#zoomwrap label{display:inline;color:#ccc;font-weight:normal;font-size:.8rem}
+#zoomwrap input{width:auto}
+#zoom{width:100%;height:170px;display:block;border-radius:4px}
+#panel{width:390px;background:#16213e;border-left:2px solid #0f3460;padding:16px;display:flex;flex-direction:column;gap:10px;overflow-y:auto}
+h2{font-size:1rem;color:#e94560;border-bottom:2px solid #e94560;padding-bottom:4px;text-transform:uppercase;margin-top:6px}
+label{display:block;margin-bottom:4px;font-size:.85rem;color:#4ecca3;font-weight:bold}
+select,input,button{width:100%;padding:8px;border-radius:4px;border:1px solid transparent;background:#0f3460;color:#fff;font-size:.9rem;outline:none}
+input[type=range]{accent-color:#e94560;padding:0}
+button{background:#e94560;font-weight:bold;cursor:pointer}
+button:hover:not(:disabled){background:#ff6b81}
+button:disabled,input:disabled{opacity:.4;cursor:not-allowed}
+.ins{font-size:.8rem;line-height:1.4;color:#ccc;background:#1a1a2e;padding:8px;border-radius:4px}
+.chip{font-size:.85rem;padding:5px 8px;border-radius:4px;background:#1a1a2e;text-align:center;color:#aaa}
+.chip.on{color:#2ecc71;border:1px solid #2ecc71}
+#msg{font-size:.85rem;min-height:1.2em}
+.good{color:#2ecc71}.warn{color:#ffb142}
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+th,td{border:1px solid #0f3460;padding:5px;text-align:center}th{background:#1a1a2e;color:#4ecca3}
+.row{display:flex;align-items:center;gap:6px;margin:4px 0}.row span{white-space:nowrap;font-size:.85rem}
+.two{display:flex;gap:6px;margin-top:4px}.two button{background:#0f3460}
+.ok{border-color:#2ecc71!important;background:#14532d!important}.bad{border-color:#e94560!important;background:#5a1a2a!important}
+#calc.lock{opacity:.35;pointer-events:none}
+details{font-size:.8rem;color:#ccc;background:#1a1a2e;border-radius:4px;padding:6px 8px;margin:4px 0;line-height:1.5}
+#final{font-size:1.05rem;font-weight:bold;text-align:center;padding:8px;border:1px solid #e94560;border-radius:6px;margin-top:6px}
+@media(max-width:900px){#container{flex-direction:column;height:auto}#cc{flex:none;height:78vh}#panel{width:100%}}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+<div id="container">
+ <div id="cc">
+  <div id="title"><h1>THÍ NGHIỆM PANME 3D</h1><p>Bài 2.2: Đo đường kính vật nhỏ, 3 lần ở 3 vị trí</p></div>
+  <button id="bView">🔍 Phóng to hai má đo</button>
+  <div id="zoomwrap">
+   <div class="zt"><span>Kính lúp: thước thẳng (ống) và thước tròn (ống quay) — độ đọc 0,01 mm</span><span><input type="checkbox" id="hint"> <label for="hint">Gợi ý vạch trùng</label></span></div>
+   <canvas id="zoom"></canvas>
+  </div>
+ </div>
+ <div id="panel">
+  <h2>1. Chọn vật đo</h2>
+  <select id="mode">
+   <option value="pen">Bảng 4: Ngòi bút Thiên Long</option>
+   <option value="wire">Bảng 5: Dây đồng</option>
+  </select>
+
+  <h2>2. Thao tác đo <span id="tag" style="color:#4ecca3"></span></h2>
+  <div class="ins" id="guide"></div>
+  <details><summary>Cách đọc số trên panme</summary>
+   <b>Bước 1:</b> đọc <b>a</b> trên thước thẳng: vạch (1 mm hoặc 0,5 mm) nằm sát nhất bên trái mép ống quay.<br>
+   <b>Bước 2:</b> đọc <b>b</b> = n × 0,01 mm, với n là vạch trên thước tròn trùng với đường kẻ ngang.<br>
+   <b>Bước 3:</b> d = a + b. Ví dụ a = 30 mm, n = 45 → d = 30,45 mm.
+  </details>
+  <button id="bPlace">① Lấy vật trên bàn, đặt vào giữa hai má</button>
+  <div>
+   <label for="slider">② Vặn ống quay (kéo thanh trượt):</label>
+   <input type="range" id="slider" min="0" max="25" step="0.01" value="0">
+   <div class="two"><button id="bM">Vặn lùi 0,01</button><button id="bP">Vặn tới 0,01</button></div>
+  </div>
+  <div class="chip" id="chip">—</div>
+  <div>
+   <label for="readIn">Số đọc được d = a + b (mm):</label>
+   <input type="number" id="readIn" step="0.01" placeholder="vd: 2.38">
+  </div>
+  <button id="bRec">③ Ghi kết quả vào bảng</button>
+  <button id="bOut">④ Lấy vật ra, đo ở vị trí khác</button>
+  <div id="msg"></div>
+
+  <h2>3. Bảng số liệu <span id="tabName" style="color:#4ecca3"></span></h2>
+  <table>
+   <thead><tr><th>Lần</th><th>Vị trí đo</th><th>A<sub>i</sub> (mm)</th></tr></thead>
+   <tbody>
+    <tr><td>1</td><td>gần một đầu</td><td id="v0">---</td></tr>
+    <tr><td>2</td><td>ở giữa</td><td id="v1">---</td></tr>
+    <tr><td>3</td><td>gần đầu kia</td><td id="v2">---</td></tr>
+   </tbody>
+  </table>
+
+  <h2>4. Xử lý số liệu</h2>
+  <div id="calc" class="lock">
+   <div class="ins">Giá trị trung bình: <b>Ā = (A₁ + A₂ + A₃) / 3</b></div>
+   <div class="row"><span>Ā =</span><input id="cAvg" type="number" step="any"><span>mm</span></div>
+   <div class="ins">Sai số tuyệt đối ứng với mỗi lần đo (tự tính):</div>
+   <div class="row"><span>ΔA₁</span><input id="c1" type="number" step="any"><span>ΔA₂</span><input id="c2" type="number" step="any"><span>ΔA₃</span><input id="c3" type="number" step="any"></div>
+   <div class="ins">Sai số ngẫu nhiên (sai số tuyệt đối trung bình của 3 lần đo, tự tính):</div>
+   <div class="row"><span>ΔĀ =</span><input id="cDm" type="number" step="any"><span>mm</span></div>
+   <div class="ins">Sai số của phép đo (tự tính):</div>
+   <div class="row"><span>ΔA =</span><input id="cDA" type="number" step="any"><span>mm</span></div>
+   <details><summary>Gợi ý công thức</summary>
+    ΔAᵢ = |Ā − Aᵢ|<br>ΔĀ = (ΔA₁ + ΔA₂ + ΔA₃) / 3<br>ΔA = ΔĀ + ΔA', với sai số dụng cụ ΔA' = 0,01 mm (một độ chia nhỏ nhất của panme).<br>Viết kết quả: A = Ā ± ΔA, ΔA lấy tối đa 2 chữ số có nghĩa, Ā viết đến bậc thập phân tương ứng.
+   </details>
+   <button id="bCheck">Kiểm tra kết quả</button>
+   <button id="bShow" style="background:#0f3460;margin-top:6px">Xem đáp án</button>
+   <div id="final" style="display:none"></div>
+  </div>
+  <button id="bReset" style="background:#0f3460">Làm lại từ đầu</button>
+ </div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+// Kích thước thật (mm) của vật ở 3 vị trí đo - sửa tại đây nếu muốn đổi số liệu
+const V={pen:[2.38,2.40,2.37],wire:[1.12,1.14,1.11]};
+const OFF=[-4,0,4];            // dịch vật dọc trục để đo ở vị trí khác nhau
+const TOL=0.0055,DC=0.01,TABS={pen:'(Bảng 4)',wire:'(Bảng 5)'};
+let S={mode:'pen',t:0,stage:'table',rd:[null,null,null]};
+const tv=()=>V[S.mode][S.t];
+
+// ---------- THREE.JS ----------
+const cc=$('cc'),scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(45,cc.clientWidth/cc.clientHeight,0.1,2000);
+const FULL={p:new THREE.Vector3(60,-10,190),t:new THREE.Vector3(50,-30,0)};
+const CLOSE={p:new THREE.Vector3(6,4,34),t:new THREE.Vector3(6,0,0)};
+camera.position.copy(FULL.p);
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(cc.clientWidth,cc.clientHeight);cc.appendChild(renderer.domElement);
+const controls=new THREE.OrbitControls(camera,renderer.domElement);
+controls.target.copy(FULL.t);controls.enableDamping=true;controls.update();
+scene.add(new THREE.AmbientLight(0xffffff,.65));
+const dl=new THREE.DirectionalLight(0xffffff,.8);dl.position.set(50,100,150);scene.add(dl);
+const dl2=new THREE.DirectionalLight(0x90e0ef,.4);dl2.position.set(-80,-50,-80);scene.add(dl2);
+const steel=new THREE.MeshStandardMaterial({color:0xc0c0c0,roughness:.3,metalness:.8});
+const dark=new THREE.MeshStandardMaterial({color:0x33383d,roughness:.5,metalness:.5});
+const tick=new THREE.MeshBasicMaterial({color:0x111111});
+const MAT={pen:new THREE.MeshStandardMaterial({color:0x1e5bbd,roughness:.4,metalness:.3}),
+           wire:new THREE.MeshStandardMaterial({color:0xb87333,roughness:.35,metalness:.8})};
+const table=new THREE.Mesh(new THREE.PlaneGeometry(500,300),new THREE.MeshStandardMaterial({color:0x2c3e50}));
+table.rotation.x=-Math.PI/2;table.position.set(50,-45,0);scene.add(table);
+function cyl(r,len,x0,mat,p){const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,len,40),mat);
+  m.rotation.z=Math.PI/2;m.position.x=x0+len/2;p.add(m);return m;}
+
+// Panme (1 đơn vị = 1 mm). Mặt đe cố định ở x = 0, mặt trục đo ở x = số đọc.
+const frame=new THREE.Mesh(new THREE.TorusGeometry(34,3.6,16,64,Math.PI),dark);
+frame.rotation.z=Math.PI;frame.position.set(18,0,0);scene.add(frame);
+cyl(3.2,16,-16,steel,scene);                 // đe (thanh đo cứng cố định)
+cyl(7,8,44,dark,scene);                      // cổ khung
+cyl(5.5,40,52,steel,scene);                  // ống thước thẳng
+for(let k=0;k<=50;k++){const h=k%2?4:7,y=k%2?-h/2:h/2;  // vạch trên ống (x = 52 + mm)
+  const b=new THREE.Mesh(new THREE.BoxGeometry(.18,h,.2),tick);b.position.set(52+k/2,y,5.6);scene.add(b);}
+const mv=new THREE.Group();scene.add(mv);    // phần chuyển động: mv.position.x = số đọc
+cyl(3.2,62,0,steel,mv);                      // trục đo
+cyl(8.5,40,52,steel,mv);                     // ống quay (thước tròn), mép tại x = 52 + số đọc
+cyl(6.5,16,92,dark,mv);                      // vít ly hợp
+
+// Vật đo: trụ nhỏ, trục thẳng đứng khi nằm giữa hai má
+const obj=new THREE.Group();scene.add(obj);let rotTarget=Math.PI/2;
+function build(){
+  while(obj.children.length){const c=obj.children[0];obj.remove(c);c.geometry.dispose();}
+  const r=tv()/2;obj.add(new THREE.Mesh(new THREE.CylinderGeometry(r,r,14,32),MAT[S.mode]));
+}
+const V3=(x,y,z)=>new THREE.Vector3(x,y,z);
+const pose=()=>V3(tv()/2,-OFF[S.t],0);
+const tablePose=()=>V3(110,-45+tv()/2,35);
+const approach=()=>pose().add(V3(0,0,45));
+let path=[],onDone=null;
+const go=(p,rx,cb)=>{path=p;rotTarget=rx;onDone=cb;};
+let camGoal=null;
+function view(g){camGoal=g;}
+$('bView').onclick=()=>{const close=$('bView').dataset.c!=='1';$('bView').dataset.c=close?'1':'0';
+  $('bView').textContent=close?'🔭 Xem toàn bộ':'🔍 Phóng to hai má đo';
+  view(close?{p:CLOSE.p.clone().add(V3(tv()/2-6,0,0)),t:CLOSE.t.clone().add(V3(tv()/2-6,0,0))}:FULL);};
+
+// ---------- KÍNH LÚP ĐỌC SỐ ----------
+const zc=$('zoom'),cx=zc.getContext('2d');
+function ln(x1,y1,x2,y2){cx.beginPath();cx.moveTo(x1,y1);cx.lineTo(x2,y2);cx.stroke();}
+function draw(v){
+  const W=zc.width=zc.clientWidth,H=zc.height=zc.clientHeight;
+  const sc=48,xe=W*0.5,y0=Math.round(H*0.5),dy=12;
+  const k2=Math.floor(v*2+1e-9),a=k2/2,n=(v-a)/0.01;       // a: vạch ống (0,5 mm), n: vạch thước tròn
+  cx.fillStyle='#d9dde0';cx.fillRect(0,6,xe,H-12);        // ống thước thẳng
+  const g=cx.createLinearGradient(0,0,0,H);g.addColorStop(0,'#7d858c');g.addColorStop(.5,'#c9cfd4');g.addColorStop(1,'#7d858c');
+  cx.fillStyle=g;cx.fillRect(xe,2,W-xe,H-4);              // ống quay
+  cx.lineWidth=1;cx.strokeStyle='#000';cx.fillStyle='#000';cx.font='bold 13px Arial';cx.textAlign='center';
+  ln(0,y0,xe,y0);                                          // đường chuẩn
+  for(let k=Math.max(0,Math.floor((v-xe/sc)*2)-1);k<=k2;k++){
+    const m=k/2,x=xe-(v-m)*sc;if(x<0)continue;
+    if(k%2==0){ln(x,y0,x,y0-(m%5==0?34:22));if(m%5==0)cx.fillText(m,x,y0-40);}
+    else ln(x,y0,x,y0+14);
+  }
+  cx.strokeStyle='#000';ln(xe,4,xe,H-4);                   // mép ống quay
+  cx.textAlign='left';
+  for(let kk=Math.floor(n)-10;kk<=Math.floor(n)+10;kk++){
+    const y=y0-(kk-n)*dy;if(y<10||y>H-10)continue;
+    ln(xe+2,y,xe+(kk%5==0?34:20),y);
+    if(kk%5==0)cx.fillText(((kk%50)+50)%50,xe+42,y+4);
+  }
+  cx.strokeStyle='#e94560';cx.lineWidth=2;cx.setLineDash([6,4]);ln(xe,y0,W,y0);cx.setLineDash([]);
+  if($('hint').checked){
+    const kk=Math.round(n),y=y0-(kk-n)*dy;cx.strokeStyle='#00b894';cx.lineWidth=4;ln(xe+2,y,xe+34,y);
+  }
+  cx.fillStyle='#37474f';cx.font='11px Arial';
+  cx.fillText('Thước thẳng (mm)',8,18);cx.fillText('Thước tròn (50 vạch, 1 vạch = 0,01 mm)',xe+70,18);
+  cx.fillStyle='#e94560';cx.fillText('đường chuẩn',xe+70,y0-6);
+}
+
+// ---------- LOGIC ----------
+const gap=()=>parseFloat($('slider').value);
+function setGap(v){v=Math.min(25,Math.max(0,Math.round(v*100)/100));mv.position.x=v;$('slider').value=v;draw(v);chip();}
+const touching=()=>S.stage==='clamp'&&Math.round(gap()*100)===Math.round(tv()*100);
+function chip(){const c=$('chip');
+  if(S.stage==='clamp'){const t=touching();c.textContent=t?'✔ "Tách!" — vít ly hợp đã trượt, dừng vặn':'… hai má chưa áp sát vật';c.className='chip'+(t?' on':'');}
+  else{c.textContent='—';c.className='chip';}
+  $('bRec').disabled=!touching();}
+function move(v){if(S.stage==='clamp')v=Math.max(v,tv());setGap(v);}
+$('slider').addEventListener('input',e=>move(parseFloat(e.target.value)));
+$('bM').onclick=()=>move(gap()-0.01);$('bP').onclick=()=>move(gap()+0.01);
+$('hint').addEventListener('change',()=>draw(gap()));
+const openGap=()=>tv()+3;
+const msg=(t,c)=>{$('msg').textContent=t;$('msg').className=c||'';};
+
+function ui(){
+  const st=S.stage,done=S.rd.every(x=>x!==null);
+  $('tag').textContent=`— lần đo ${S.t+1}/3`;$('tabName').textContent=TABS[S.mode];
+  $('bPlace').disabled=st!=='table';
+  const mv_=st==='table'||st==='clamp';
+  $('slider').disabled=!mv_;$('bM').disabled=$('bP').disabled=!mv_;
+  $('readIn').disabled=st!=='clamp';
+  $('bOut').disabled=st!=='recorded';
+  $('bOut').textContent=S.t<2?'④ Lấy vật ra, đo ở vị trí khác':'④ Lấy vật ra (hoàn tất 3 lần đo)';
+  let g='';
+  if(st==='table')g=`Vật đang nằm trên bàn. Bấm ① để đặt vật vào giữa hai má (vị trí ${S.t+1}/3).`;
+  else if(st==='moving')g='Đang di chuyển vật...';
+  else if(st==='clamp')g=touching()?'Đã nghe "tách": dừng vặn. Quan sát kính lúp: đọc a trên thước thẳng, b = n × 0,01 trên thước tròn, rồi nhập d = a + b và bấm ③.':'Vặn ống quay để hai má áp sát vật. Vặn nhẹ dần, khi vít ly hợp kêu "tách" thì dừng lại.';
+  else if(st==='recorded')g='Đã ghi kết quả. Bấm ④ để lấy vật ra rồi đo ở vị trí khác.';
+  else g='Đã đo xong 3 lần. Hãy xử lý số liệu ở mục 4.';
+  $('guide').textContent=g;
+  for(let i=0;i<3;i++)$('v'+i).textContent=S.rd[i]===null?'---':S.rd[i].toFixed(2);
+  $('calc').classList.toggle('lock',!done);
+  chip();
+}
+$('bPlace').onclick=()=>{S.stage='moving';setGap(openGap());msg('');ui();
+  go([approach(),pose()],0,()=>{S.stage='clamp';ui();});};
+$('bRec').onclick=()=>{
+  const v=parseFloat($('readIn').value);
+  if(isNaN(v)){msg('Hãy nhập số đọc được vào ô trước.','warn');return;}
+  if(Math.abs(v-tv())>0.005){msg(`Số bạn nhập (${v}) chưa khớp số chỉ của panme. Đọc lại: a (vạch thước thẳng sát mép ống quay) + n × 0,01 (vạch thước tròn trùng đường chuẩn).`,'warn');return;}
+  S.rd[S.t]=v;S.stage='recorded';msg(`✔ Đã ghi lần ${S.t+1}: ${v.toFixed(2)} mm`,'good');ui();};
+$('bOut').onclick=()=>{S.stage='moving';setGap(openGap());ui();
+  go([approach(),tablePose()],Math.PI/2,()=>{
+    if(S.t<2){S.t++;S.stage='table';build();obj.position.copy(tablePose());$('readIn').value='';msg('');}
+    else{S.stage='done';msg('Hoàn tất 3 lần đo!','good');}
+    ui();});};
+$('mode').onchange=reset;$('bReset').onclick=reset;
+function reset(){
+  S={mode:$('mode').value,t:0,stage:'table',rd:[null,null,null]};path=[];onDone=null;
+  build();obj.position.copy(tablePose());obj.rotation.x=Math.PI/2;rotTarget=Math.PI/2;setGap(0);
+  ['readIn','cAvg','c1','c2','c3','cDm','cDA'].forEach(i=>{$(i).value='';$(i).classList.remove('ok','bad');});
+  $('final').style.display='none';msg('');ui();}
+
+// ---------- XỬ LÝ SỐ LIỆU ----------
+function expected(){const a=S.rd,avg=(a[0]+a[1]+a[2])/3,di=a.map(x=>Math.abs(avg-x)),dm=(di[0]+di[1]+di[2])/3;
+  return{avg,di,dm,dA:dm+DC};}
+function check(){
+  const e=expected(),pairs=[['cAvg',e.avg],['c1',e.di[0]],['c2',e.di[1]],['c3',e.di[2]],['cDm',e.dm],['cDA',e.dA]];
+  let all=true;
+  pairs.forEach(([id,x])=>{const el=$(id),v=parseFloat(el.value),ok=!isNaN(v)&&Math.abs(v-x)<=TOL;
+    el.classList.toggle('ok',ok);el.classList.toggle('bad',!ok);if(!ok)all=false;});
+  const f=$('final');f.style.display='block';
+  if(all){const dec=Math.max(0,1-Math.floor(Math.log10(e.dA)));   // ΔA tối đa 2 chữ số có nghĩa
+    f.textContent=`A = ${e.avg.toFixed(dec)} ± ${e.dA.toFixed(dec)} mm`;}
+  else f.textContent='Còn ô chưa đúng (viền đỏ). Tính lại nhé!';
+}
+$('bCheck').onclick=check;
+$('bShow').onclick=()=>{const e=expected();
+  $('cAvg').value=e.avg.toFixed(4);$('c1').value=e.di[0].toFixed(4);$('c2').value=e.di[1].toFixed(4);
+  $('c3').value=e.di[2].toFixed(4);$('cDm').value=e.dm.toFixed(4);$('cDA').value=e.dA.toFixed(4);check();};
+
+reset();
+(function animate(){
+  requestAnimationFrame(animate);
+  if(path.length){const t=path[0],d=t.clone().sub(obj.position),l=d.length();
+    if(l<=3){obj.position.copy(t);path.shift();if(!path.length&&onDone){const f=onDone;onDone=null;f();}}
+    else obj.position.add(d.setLength(3));}
+  obj.rotation.x+=(rotTarget-obj.rotation.x)*0.12;
+  if(camGoal){camera.position.lerp(camGoal.p,0.08);controls.target.lerp(camGoal.t,0.08);
+    if(camera.position.distanceTo(camGoal.p)<0.3)camGoal=null;}
+  controls.update();renderer.render(scene,camera);
+})();
+window.addEventListener('resize',()=>{
+  camera.aspect=cc.clientWidth/cc.clientHeight;camera.updateProjectionMatrix();
+  renderer.setSize(cc.clientWidth,cc.clientHeight);draw(gap());});
+</script>
+</body>
+</html>
